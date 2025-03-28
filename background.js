@@ -32,7 +32,7 @@ const startTyping = async (tabId) => {
 
   for (let i = 0; i < text.length && tasks[tabId] === taskId; i++) {
     await typeCharacter(tabId, text[i]);
-    await wait(randomNumber(5, 10));  // Faster typing speed
+    await wait(randomNumber(10, 30));  // Faster typing speed
   }
 
   stopTyping(tabId);
@@ -47,24 +47,35 @@ const stopTyping = (tabId) => {
 
 const typeCharacter = async (tabId, char) => {
   if (char === "\n") {
+    // Simulate Enter key press
     await chrome.debugger.sendCommand({ tabId }, "Input.dispatchKeyEvent", {
       type: "keyDown",
-      key: "Enter"
+      key: "Enter",
+      code: "Enter",
+      windowsVirtualKeyCode: 13,  // VK_RETURN
     });
     await chrome.debugger.sendCommand({ tabId }, "Input.dispatchKeyEvent", {
       type: "keyUp",
-      key: "Enter"
+      key: "Enter",
+      code: "Enter",
+      windowsVirtualKeyCode: 13,
     });
   } else if (char === "\t") {
+    // Simulate Tab key press
     await chrome.debugger.sendCommand({ tabId }, "Input.dispatchKeyEvent", {
       type: "keyDown",
-      key: "Tab"
+      key: "Tab",
+      code: "Tab",
+      windowsVirtualKeyCode: 9,  // VK_TAB
     });
     await chrome.debugger.sendCommand({ tabId }, "Input.dispatchKeyEvent", {
       type: "keyUp",
-      key: "Tab"
+      key: "Tab",
+      code: "Tab",
+      windowsVirtualKeyCode: 9,
     });
   } else {
+    // Regular character insertion
     await chrome.debugger.sendCommand({ tabId }, "Input.insertText", { text: char });
   }
 };
