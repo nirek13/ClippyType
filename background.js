@@ -32,7 +32,7 @@ const startTyping = async (tabId) => {
 
   for (let i = 0; i < text.length && tasks[tabId] === taskId; i++) {
     await typeCharacter(tabId, text[i]);
-    await wait(randomNumber(10, 30));  // Faster typing speed
+    await wait(randomNumber(5, 10));  // Faster typing speed
   }
 
   stopTyping(tabId);
@@ -45,8 +45,29 @@ const stopTyping = (tabId) => {
   }
 };
 
-const typeCharacter = (tabId, char) =>
-  chrome.debugger.sendCommand({ tabId }, "Input.insertText", { text: char });
+const typeCharacter = async (tabId, char) => {
+  if (char === "\n") {
+    await chrome.debugger.sendCommand({ tabId }, "Input.dispatchKeyEvent", {
+      type: "keyDown",
+      key: "Enter"
+    });
+    await chrome.debugger.sendCommand({ tabId }, "Input.dispatchKeyEvent", {
+      type: "keyUp",
+      key: "Enter"
+    });
+  } else if (char === "\t") {
+    await chrome.debugger.sendCommand({ tabId }, "Input.dispatchKeyEvent", {
+      type: "keyDown",
+      key: "Tab"
+    });
+    await chrome.debugger.sendCommand({ tabId }, "Input.dispatchKeyEvent", {
+      type: "keyUp",
+      key: "Tab"
+    });
+  } else {
+    await chrome.debugger.sendCommand({ tabId }, "Input.insertText", { text: char });
+  }
+};
 
 const readClipboard = (tabId) =>
   chrome.scripting
