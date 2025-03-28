@@ -3,91 +3,56 @@ const State = {
   Stop: "1",
 };
 
-// Important: use "all" context as this also allows to write
-// on "special" elements, such as google docs
-chrome.contextMenus.create({
-  id: State.Start,
-  title: "Start typing",
-  contexts: ["all"],
-});
+chrome.contextMenus.create({ id: State.Start, title: "Start typing", contexts: ["all"] });
+chrome.contextMenus.create({ id: State.Stop, title: "Stop typing", contexts: ["all"] });
 
-chrome.contextMenus.create({
-  id: State.Stop,
-  title: "Stop typing",
-  contexts: ["all"],
-});
+const tasks = {};
 
-chrome.contextMenus.onClicked.addListener(({ menuItemId }, tab) => {
-  if (menuItemId == State.Start) {
-    startTyping(tab.id);
+chrome.contextMenus.onClicked.addListener(async ({ menuItemId }, tab) => {
+  const tabId = tab.id;
+  if (menuItemId === State.Start) {
+    if (tasks[tabId]) stopTyping(tabId);
+    startTyping(tabId);
   } else {
-    stopTyping(tab.id);
+    stopTyping(tabId);
   }
 });
-
-// Track current task for each tab to prevent running multiple
-// tasks on the same tab. New tasks will end previous ones.
-let tasks = {};
 
 const startTyping = async (tabId) => {
-  const taskId = Math.random();
+  const taskId = (tasks[tabId] = Math.random());
 
-  tasks[tabId] = taskId;
-
-  await chrome.debugger.attach({ tabId }, "1.3").catch(() => {});
-
-  const text = [...(await readClipboard(tabId))];
-
-  let i = 0;
-
-  while (tasks[tabId] === taskId && i < text.length) {
-    await typeCharacter(tabId, text[i]);
-    // Random delay from 50ms to 200ms
-    // Source: https://sa.rochester.edu/jur/issues/fall2005/ordal.pdf
-    await wait(randomNumber(10, 40));
-    i++;
+  try {
+    await chrome.debugger.attach({ tabId }, "1.3");
+  } catch {
+    return stopTyping(tabId);
   }
 
-  // cleanup
+  const text = await readClipboard(tabId);
+  if (!text) return stopTyping(tabId);
+
+  for (let i = 0; i < text.length && tasks[tabId] === taskId; i++) {
+    await typeCharacter(tabId, text[i]);
+    await wait(randomNumber(10, 30));  // Faster typing speed
+  }
+
   stopTyping(tabId);
 };
 
 const stopTyping = (tabId) => {
-  delete tasks[tabId];
+  if (tasks[tabId]) {
+    chrome.debugger.detach({ tabId }).catch(() => {});
+    delete tasks[tabId];
+  }
 };
 
-const typeCharacter = async (tabId, character) => {
-  await chrome.debugger.sendCommand({ tabId }, "Input.insertText", { text: character });
+const typeCharacter = (tabId, char) =>
+  chrome.debugger.sendCommand({ tabId }, "Input.insertText", { text: char });
 
-  /* 
-     As there isn't a reliable way of sending certain characters like \n without
-     adding additional logic and the method below doesn't support emojis, the above
-     solution was just simpler. Might consider the one below if the current method
-     gets detected or blocked. 
-  */
+const readClipboard = (tabId) =>
+  chrome.scripting
+    .executeScript({ target: { tabId }, func: () => navigator.clipboard.readText() })
+    .then(([res]) => res?.result || "");
 
-  //await chrome.debugger.sendCommand({ tabId }, "Input.dispatchKeyEvent", {
-  //  type: "keyDown",
-  //  code: character,
-  //});
-  //await wait(randomNumber(70, 150));
-  //await chrome.debugger.sendCommand({ tabId }, "Input.dispatchKeyEvent", {
-  //  type: "keyUp",
-  //  code: character,
-  //});
-};
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
-const readClipboard = async (tabId) => {
-  return chrome.scripting
-    .executeScript({
-      target: { tabId },
-      func: () => navigator.clipboard.readText(),
-    })
-    .then(([{ result }]) => result);
-};
-
-const wait = (milliseconds) =>
-  new Promise((resolve) => setTimeout(resolve, milliseconds));
-
-const randomNumber = (min, max) =>
-  Math.floor(Math.random() * (max - min + 1)) + min;
+const randomNumber = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
