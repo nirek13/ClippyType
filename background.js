@@ -31,52 +31,42 @@ const startTyping = async (tabId) => {
   if (!text) return stopTyping(tabId);
 
   for (let i = 0; i < text.length && tasks[tabId] === taskId; i++) {
-    await typeCharacter(tabId, text[i]);
+    const char = text[i];
+
+    if (char === "\n") {
+      await pressKey(tabId, "Enter", 13);  // VK_RETURN
+    } else if (char === "\t") {
+      await pressKey(tabId, "Tab", 9);      // VK_TAB
+    } else {
+      await chrome.debugger.sendCommand({ tabId }, "Input.insertText", { text: char });
+    }
+
     await wait(randomNumber(10, 30));  // Faster typing speed
   }
 
   stopTyping(tabId);
 };
 
+const pressKey = async (tabId, key, keyCode) => {
+  await chrome.debugger.sendCommand({ tabId }, "Input.dispatchKeyEvent", {
+    type: "keyDown",
+    key: key,
+    code: key,
+    windowsVirtualKeyCode: keyCode,
+  });
+
+  await chrome.debugger.sendCommand({ tabId }, "Input.dispatchKeyEvent", {
+    type: "keyUp",
+    key: key,
+    code: key,
+    windowsVirtualKeyCode: keyCode,
+  });
+};
+
 const stopTyping = (tabId) => {
   if (tasks[tabId]) {
     chrome.debugger.detach({ tabId }).catch(() => {});
     delete tasks[tabId];
-  }
-};
-
-const typeCharacter = async (tabId, char) => {
-  if (char === "\n") {
-    // Simulate Enter key press
-    await chrome.debugger.sendCommand({ tabId }, "Input.dispatchKeyEvent", {
-      type: "keyDown",
-      key: "Enter",
-      code: "Enter",
-      windowsVirtualKeyCode: 13,  // VK_RETURN
-    });
-    await chrome.debugger.sendCommand({ tabId }, "Input.dispatchKeyEvent", {
-      type: "keyUp",
-      key: "Enter",
-      code: "Enter",
-      windowsVirtualKeyCode: 13,
-    });
-  } else if (char === "\t") {
-    // Simulate Tab key press
-    await chrome.debugger.sendCommand({ tabId }, "Input.dispatchKeyEvent", {
-      type: "keyDown",
-      key: "Tab",
-      code: "Tab",
-      windowsVirtualKeyCode: 9,  // VK_TAB
-    });
-    await chrome.debugger.sendCommand({ tabId }, "Input.dispatchKeyEvent", {
-      type: "keyUp",
-      key: "Tab",
-      code: "Tab",
-      windowsVirtualKeyCode: 9,
-    });
-  } else {
-    // Regular character insertion
-    await chrome.debugger.sendCommand({ tabId }, "Input.insertText", { text: char });
   }
 };
 
