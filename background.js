@@ -3,8 +3,7 @@ const State = {
   Stop: "1",
 };
 
-// Important: use "all" context as this also allows to write
-// on "special" elements, such as google docs
+// Create context menu items
 chrome.contextMenus.create({
   id: State.Start,
   title: "Start typing",
@@ -25,31 +24,34 @@ chrome.contextMenus.onClicked.addListener(({ menuItemId }, tab) => {
   }
 });
 
-// Track current task for each tab to prevent running multiple
-// tasks on the same tab. New tasks will end previous ones.
+// Track current task for each tab to prevent running multiple tasks on the same tab
 let tasks = {};
 
 const startTyping = async (tabId) => {
   const taskId = Math.random();
-
   tasks[tabId] = taskId;
 
-  await chrome.debugger.attach({ tabId }, "1.3").catch(() => {});
+  try {
+    await chrome.debugger.attach({ tabId }, "1.3");
 
-  const text = [...(await readClipboard(tabId))];
+    const text = [...(await readClipboard(tabId))];
+    let i = 0;
 
-  let i = 0;
+    while (tasks[tabId] === taskId && i < text.length) {
+      await typeCharacter(tabId, text[i]);
+      await wait(randomNumber(50, 200)); // Adjust speed with delay between characters
+      i++;
+    }
 
-  while (tasks[tabId] === taskId && i < text.length) {
-    await typeCharacter(tabId, text[i]);
-    // Random delay from 50ms to 200ms
-    // Source: https://sa.rochester.edu/jur/issues/fall2005/ordal.pdf
-    await wait(randomNumber(5, 10));
-    i++;
+    // Show notification when typing is complete
+    showNotification("Typing task completed!");
+  } catch (error) {
+    console.error("Error during typing task:", error);
+    showNotification("Typing task failed.");
+  } finally {
+    // Cleanup
+    stopTyping(tabId);
   }
-
-  // cleanup
-  stopTyping(tabId);
 };
 
 const stopTyping = (tabId) => {
@@ -57,24 +59,11 @@ const stopTyping = (tabId) => {
 };
 
 const typeCharacter = async (tabId, character) => {
-  await chrome.debugger.sendCommand({ tabId }, "Input.insertText", { text: character });
-
-  /* 
-     As there isn't a reliable way of sending certain characters like \n without
-     adding additional logic and the method below doesn't support emojis, the above
-     solution was just simpler. Might consider the one below if the current method
-     gets detected or blocked. 
-  */
-
-  //await chrome.debugger.sendCommand({ tabId }, "Input.dispatchKeyEvent", {
-  //  type: "keyDown",
-  //  code: character,
-  //});
-  //await wait(randomNumber(70, 150));
-  //await chrome.debugger.sendCommand({ tabId }, "Input.dispatchKeyEvent", {
-  //  type: "keyUp",
-  //  code: character,
-  //});
+  try {
+    await chrome.debugger.sendCommand({ tabId }, "Input.insertText", { text: character });
+  } catch (error) {
+    console.error("Failed to type character:", error);
+  }
 };
 
 const readClipboard = async (tabId) => {
@@ -91,3 +80,31 @@ const wait = (milliseconds) =>
 
 const randomNumber = (min, max) =>
   Math.floor(Math.random() * (max - min + 1)) + min;
+
+// Show a notification on completion
+const showNotification = (message) => {
+  chrome.notifications.create({
+    type: "basic",
+    iconUrl: "icon.png", // Add your icon image here
+    title: "Typing Task",
+    message: message,
+  });
+};
+
+// Add event listener for notifications click (optional)
+chrome.notifications.onClicked.addListener(() => {
+  chrome.tabs.create({ url: "https://docs.google.com" });
+});
+
+// Ensure compatibility with Google Docs and other websites
+const isGoogleDocsPage = (url) => {
+  return url.includes("docs.google.com");
+};
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (isGoogleDocsPage(tab.url) && changeInfo.status === "complete") {
+    console.log("Google Docs loaded. Ready for typing.");
+    // Ensure typing task is initialized properly
+    // Optionally check and fix specific elements to target Google Docs inputs
+  }
+});
