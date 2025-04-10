@@ -44,7 +44,7 @@ const State = {
      await typeCharacter(tabId, text[i]);
      // Random delay from 50ms to 200ms
      // Source: https://sa.rochester.edu/jur/issues/fall2005/ordal.pdf
-     await wait(randomNumber(50, 200));
+     await wait(randomNumber(5, 20));
      i++;
    }
  
